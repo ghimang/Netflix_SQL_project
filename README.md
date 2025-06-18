@@ -77,6 +77,7 @@ FROM netflix
 GROUP BY type, rating 
 ORDER BY type, count DESC;
 
+-- Using CTE
 
 WITH ranked_ratings AS 
    (SELECT 
