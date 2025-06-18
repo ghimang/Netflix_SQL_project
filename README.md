@@ -44,11 +44,11 @@ CREATE TABLE netflix
 ### 1. Count the Number of Movies vs TV Shows
 
 ```sql
-SELECT 
-    type,
-    COUNT(*)
+SELECT
+     type,
+	 COUNT(*) as total_content
 FROM netflix
-GROUP BY 1;
+GROUP BY type
 ```
 
 **Objective:** Determine the distribution of content types on Netflix.
@@ -102,9 +102,12 @@ WHERE rank = 1;
 ### 3. List All Movies Released in a Specific Year (e.g., 2020)
 
 ```sql
-SELECT * 
-FROM netflix
-WHERE release_year = 2020;
+
+SELECT * FROM netflix
+WHERE 
+     type = 'Movie'
+	 AND
+	 release_year = 2020
 ```
 
 **Objective:** Retrieve all movies released in a specific year.
@@ -124,6 +127,17 @@ FROM
 WHERE country IS NOT NULL
 ORDER BY total_content DESC
 LIMIT 5;
+
+-- Alternative way
+
+SELECT
+     UNNEST(STRING_TO_ARRAY(country, ',')) AS new_country,
+	 COUNT(show_id) as total_content
+FROM netflix
+GROUP BY 1
+ORDER BY 2 DESC
+LIMIT 5
+
 ```
 
 **Objective:** Identify the top 5 countries with the highest number of content items.
@@ -136,6 +150,14 @@ SELECT
 FROM netflix
 WHERE type = 'Movie'
 ORDER BY SPLIT_PART(duration, ' ', 1)::INT DESC;
+
+-- Alternative way
+
+SELECT * FROM netflix
+WHERE 
+    type = 'Movie'
+	AND
+	duration = (SELECT MAX(duration) FROM netflix)
 ```
 
 **Objective:** Find the movie with the longest duration.
@@ -173,14 +195,10 @@ WHERE date_added IS NOT NULL
 ### 7. Find All Movies/TV Shows by Director 'Rajiv Chilaka'
 
 ```sql
+
 SELECT *
-FROM (
-    SELECT 
-        *,
-        UNNEST(STRING_TO_ARRAY(director, ',')) AS director_name
-    FROM netflix
-) AS t
-WHERE director_name = 'Rajiv Chilaka';
+FROM netflix
+WHERE director ILIKE '%Rajiv Chilaka%'
 ```
 
 **Objective:** List all content directed by 'Rajiv Chilaka'.
@@ -188,10 +206,23 @@ WHERE director_name = 'Rajiv Chilaka';
 ### 8. List All TV Shows with More Than 5 Seasons
 
 ```sql
+SELECT 
+	*
+FROM netflix
+WHERE 
+	type ='TV Show'
+	AND SPLIT_PART(duration, ' ', 1)::numeric > 5
+
+-- Alternative way
+
 SELECT *
 FROM netflix
-WHERE type = 'TV Show'
-  AND SPLIT_PART(duration, ' ', 1)::INT > 5;
+WHERE 
+    type = 'TV Show'
+    AND duration IS NOT NULL
+    AND duration ILIKE '%Season%'
+    AND SPLIT_PART(duration, ' ', 1) ~ '^[0-9]+$'
+    AND SPLIT_PART(duration, ' ', 1)::int > 5;
 ```
 
 **Objective:** Identify TV shows with more than 5 seasons.
@@ -200,10 +231,11 @@ WHERE type = 'TV Show'
 
 ```sql
 SELECT 
-    UNNEST(STRING_TO_ARRAY(listed_in, ',')) AS genre,
-    COUNT(*) AS total_content
+	UNNEST(STRING_TO_ARRAY(listed_in,',')) as genre,
+	COUNT(listed_in) AS total_count
 FROM netflix
-GROUP BY 1;
+GROUP BY 1
+
 ```
 
 **Objective:** Count the number of content items in each genre.
@@ -213,18 +245,20 @@ return top 5 year with highest avg content release!
 
 ```sql
 SELECT 
-    country,
-    release_year,
-    COUNT(show_id) AS total_release,
-    ROUND(
-        COUNT(show_id)::numeric /
-        (SELECT COUNT(show_id) FROM netflix WHERE country = 'India')::numeric * 100, 2
-    ) AS avg_release
+	EXTRACT(YEAR FROM TO_DATE(date_added, 'Month DD, YYYY')) as year,
+	COUNT(*) yearly_content,
+	ROUND(
+		COUNT(*)::numeric/(
+						SELECT 
+							COUNT(*)
+						FROM netflix
+						WHERE country ILIKE '%India%')::numeric * 100, 2
+						) AS avg_content_per_year
 FROM netflix
-WHERE country = 'India'
-GROUP BY country, release_year
-ORDER BY avg_release DESC
-LIMIT 5;
+WHERE country ILIKE '%India%'
+GROUP BY 1
+ORDER BY year
+LIMIT 5
 ```
 
 **Objective:** Calculate and rank years by the average number of content releases by India.
@@ -232,9 +266,13 @@ LIMIT 5;
 ### 11. List All Movies that are Documentaries
 
 ```sql
-SELECT * 
+SELECT
+	*
 FROM netflix
-WHERE listed_in LIKE '%Documentaries';
+WHERE
+	type = 'Movie'
+	AND 
+	listed_in ILIKE '%Documentaries%'
 ```
 
 **Objective:** Retrieve all movies classified as documentaries.
@@ -242,9 +280,11 @@ WHERE listed_in LIKE '%Documentaries';
 ### 12. Find All Content Without a Director
 
 ```sql
-SELECT * 
+
+SELECT 
+	*
 FROM netflix
-WHERE director IS NULL;
+WHERE director IS NULL
 ```
 
 **Objective:** List content that does not have a director.
@@ -252,10 +292,12 @@ WHERE director IS NULL;
 ### 13. Find How Many Movies Actor 'Salman Khan' Appeared in the Last 10 Years
 
 ```sql
-SELECT * 
+SELECT *
 FROM netflix
-WHERE casts LIKE '%Salman Khan%'
-  AND release_year > EXTRACT(YEAR FROM CURRENT_DATE) - 10;
+WHERE 	
+	type = 'Movie'
+	AND casts ILIKE '%Salman Khan%'
+	AND release_year >= EXTRACT(YEAR FROM CURRENT_DATE) - 10;
 ```
 
 **Objective:** Count the number of movies featuring 'Salman Khan' in the last 10 years.
@@ -264,13 +306,14 @@ WHERE casts LIKE '%Salman Khan%'
 
 ```sql
 SELECT 
-    UNNEST(STRING_TO_ARRAY(casts, ',')) AS actor,
-    COUNT(*)
+	UNNEST(STRING_TO_ARRAY(casts,',')) AS actors,
+	COUNT(*) AS total_content
 FROM netflix
-WHERE country = 'India'
-GROUP BY actor
-ORDER BY COUNT(*) DESC
+WHERE country ILIKE '%India%'
+GROUP BY 1
+ORDER BY 2 DESC
 LIMIT 10;
+
 ```
 
 **Objective:** Identify the top 10 actors with the most appearances in Indian-produced movies.
@@ -290,6 +333,28 @@ FROM (
     FROM netflix
 ) AS categorized_content
 GROUP BY category;
+
+-- Alternative way
+
+
+- CTE (Common Table Expression)
+
+WITH new_table
+AS (
+	SELECT 
+		*,
+		CASE
+			WHEN description ILIKE '%kill%' OR
+			description ILIKE '%violence%' THEN 'Bad Content'
+			ELSE 'Good Content'
+		END category
+	FROM netflix
+)
+SELECT 
+	category,
+	COUNT(*) AS total_content
+FROM new_table
+GROUP BY 1
 ```
 
 **Objective:** Categorize content as 'Bad' if it contains 'kill' or 'violence' and 'Good' otherwise. Count the number of items in each category.
@@ -303,19 +368,3 @@ GROUP BY category;
 
 This analysis provides a comprehensive view of Netflix's content and can help inform content strategy and decision-making.
 
-
-
-## Author - Zero Analyst
-
-This project is part of my portfolio, showcasing the SQL skills essential for data analyst roles. If you have any questions, feedback, or would like to collaborate, feel free to get in touch!
-
-### Stay Updated and Join the Community
-
-For more content on SQL, data analysis, and other data-related topics, make sure to follow me on social media and join our community:
-
-- **YouTube**: [Subscribe to my channel for tutorials and insights](https://www.youtube.com/@zero_analyst)
-- **Instagram**: [Follow me for daily tips and updates](https://www.instagram.com/zero_analyst/)
-- **LinkedIn**: [Connect with me professionally](https://www.linkedin.com/in/najirr)
-- **Discord**: [Join our community to learn and grow together](https://discord.gg/36h5f2Z5PK)
-
-Thank you for your support, and I look forward to connecting with you!
