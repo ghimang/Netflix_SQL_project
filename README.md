@@ -143,9 +143,29 @@ ORDER BY SPLIT_PART(duration, ' ', 1)::INT DESC;
 ### 6. Find Content Added in the Last 5 Years
 
 ```sql
+
+SELECT show_id, title, type, date_added
+FROM netflix
+WHERE date_added IS NOT NULL
+  AND TO_DATE(date_added, 'Month DD, YYYY') >= CURRENT_DATE - INTERVAL '5 years';
+
+
 SELECT *
 FROM netflix
-WHERE TO_DATE(date_added, 'Month DD, YYYY') >= CURRENT_DATE - INTERVAL '5 years';
+WHERE
+	TO_DATE(date_added, 'Month DD, YYYY') >= CURRENT_DATE - INTERVAL '5 years'
+
+
+SELECT 
+  show_id, 
+  title, 
+  type, 
+  date_added, 
+  TO_DATE(date_added, 'Month DD, YYYY') AS parsed_date
+FROM netflix
+WHERE date_added IS NOT NULL
+  AND TO_DATE(date_added, 'Month DD, YYYY') >= CURRENT_DATE - INTERVAL '5 years';
+
 ```
 
 **Objective:** Retrieve content added to Netflix in the last 5 years.
