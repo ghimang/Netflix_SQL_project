@@ -1,3 +1,3 @@
 # Netflix Data Analysis Project using SQL
 
-![Netflix Logo]()
+![Netflix Logo](https://github.com/ghimang/Netflix_SQL_project/blob/main/netflix_titles.csv)
